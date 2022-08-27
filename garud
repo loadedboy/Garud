@@ -149,7 +149,7 @@ SUBD_PASV(){
 
 SUBD_ACTV(){
     ffuf -u http://FUZZ.$DM/ -t 100 -p '1.0-2.0' -w ~/wordlists/subdomains.txt -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36" -mc 200 -r -o .tmp/ffuf.json 
-    gobuster dns -d $DM --no-error -z -t 100 -w ~/wordlists/subdomains.txt | sed 's/Found: //g' | anew .tmp/gobuster.list
+    gobuster dns -d $DM --no-error -t 100 -w ~/wordlists/subdomains.txt | sed 's/Found: //g' | anew .tmp/gobuster.list
     amass enum -active -brute -w ~/wordlists/subdomains.txt -d $DM -o .tmp/amassact.list 
     cat .tmp/ffuf.json  | jq -r '.results[] | .host'  | anew .tmp/ffuf.list && rm -rf .tmp/ffuf.json
 }
