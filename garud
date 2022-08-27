@@ -156,7 +156,7 @@ SUBD_ACTV(){
 
 SUBD_SCND(){
     cat .tmp/*.list | grep -v "*" | sed '/@\|<BR>\|\_\|*/d' | grep "$DM" | anew .tmp/domains
-    xargs -a .tmp/domains -P 50 -I % bash -c "assetfinder --subs-only % | anew .tmp/seconddomains.list" ; timeout 30m xargs -a .tmp/domains -P 10 -I % bash -c "amass enum -passive -d %"  | anew .tmp/seconddomains.list
+    xargs -a .tmp/domains -P 50 -I % bash -c "assetfinder --subs-only % | anew .tmp/seconddomains.list" ; xargs -a .tmp/domains -P 10 -I % bash -c "amass enum -passive -d %"  | anew .tmp/seconddomains.list
 }
 
 SUBD_CHCK(){
