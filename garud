@@ -6,7 +6,7 @@
 #@> CHECK CONNECTION
 wget -q --spider http://google.com
 if [ $? -ne 0 ];then
-    echo "Connect to internet before running Garud!"
+    echo "Connect to internet before \nRUNNING Garud!"
     exit 127
 fi
 
@@ -140,36 +140,54 @@ SUBD_PASV(){
     curl -s "https://crt.sh/?q=%25.$DM&output=json" | jq -r '.[].name_value'  | sed 's/\*\.//g' | sort -u | grep -o "\w.*$DM" | anew .tmp/cert.list
     curl -s "https://api.hackertarget.com/hostsearch/?q=$DM" | grep -o "\w.*$DM" | anew .tmp/htarget.list
     curl -s "https://riddler.io/search/exportcsv?q=pld:$DM" | grep -Po "(([\w.-]*)\.([\w]*)\.([A-z]))\w+" | grep -o "\w.*$DM" | anew .tmp/riddler.list
-    assetfinder --subs-only $DM | anew .tmp/assetfinder.list
+    echo -e "\nRUNNING ASSET FINDER\n"
+	assetfinder --subs-only $DM | anew .tmp/assetfinder.list
+	echo -e "\nRUNNING SUBLIST3R \n"
     python3 ~/tools/Sublist3r/sublist3r.py -d $DM -o .tmp/sublister.list 
+	echo -e "\nRUNNING SUBFINDER\n"
     subfinder -d $DM -all -t 100 -o .tmp/subfinder.list 
+	echo -e "\nRUNNING AMASS\n"
     amass enum -passive -d $DM -o .tmp/amass.list 
+	echo -e "\nRUNNING CROBAT\n"
     crobat -s $DM | anew .tmp/crobat.list
 }
 
 SUBD_ACTV(){
+    echo -e "\nRUNNING FFUF\n"
     ffuf -u http://FUZZ.$DM/ -t 100 -p '1.0-2.0' -w ~/wordlists/subdomains.txt -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36" -mc 200 -r -o .tmp/ffuf.json 
-    gobuster dns -d $DM --no-error -t 100 -w ~/wordlists/subdomains.txt | sed 's/Found: //g' | anew .tmp/gobuster.list
-    amass enum -active -brute -w ~/wordlists/subdomains.txt -d $DM -o .tmp/amassact.list 
+    echo -e "\nRUNNING GOBUSTER\n"
+	gobuster dns -d $DM --no-error -t 100 -w ~/wordlists/subdomains.txt | sed 's/Found: //g' | anew .tmp/gobuster.list
+    echo -e "\nRUNNING AMASS\n"
+	amass enum -active -brute -v -w ~/wordlists/subdomains.txt -d $DM -o .tmp/amassact.list 
     cat .tmp/ffuf.json  | jq -r '.results[] | .host'  | anew .tmp/ffuf.list && rm -rf .tmp/ffuf.json
 }
 
 SUBD_SCND(){
     cat .tmp/*.list | grep -v "*" | sed '/@\|<BR>\|\_\|*/d' | grep "$DM" | anew .tmp/domains
-    xargs -a .tmp/domains -P 50 -I % bash -c "assetfinder --subs-only % | anew .tmp/seconddomains.list" ; xargs -a .tmp/domains -P 10 -I % bash -c "amass enum -passive -d %"  | anew .tmp/seconddomains.list
+	echo -e "\nRUNNING ASSETFINDER (SECOND SUBDOMAIN) \n"
+    xargs -a .tmp/domains -P 50 -I % bash -c "assetfinder --subs-only %" | anew .tmp/seconddomains.list  
+	
+	
+	echo -e "\nRUNNING AMASS (SECOND SUBDOMAIN) \n"	
+	xargs -a .tmp/domains -P 10 -I % bash -c "taskset --cpu-list 0-1 amass enum -passive -d %"  | anew .tmp/seconddomains.list
 }
 
 SUBD_CHCK(){
     #@> FILTERING DOMAINS
-    if [ -f "$EC" ]; then
-        cat .tmp/*.list | grep -v "*" | grep -vf $EC | sort -u | sed '/@\|<BR>\|\_\|*/d' | dnsx -a -aaaa -cname -ns -ptr -mx -soa -retry 3 -r ~/wordlists/resolvers.txt -t 10 | anew database/subdomains.txt
-    else
-        cat .tmp/*.list | grep -v "*" | sort -u | sed '/@\|<BR>\|\_\|*/d' | dnsx -a -aaaa -cname -ns -ptr -mx -soa -retry 3 -r ~/wordlists/resolvers.txt -t 10 | anew database/subdomains.txt
-    fi
+     if [ -f "$EC" ]; then
+	     echo -e "\nRUNNING DNSX\n"
+         cat .tmp/*.list | grep -v "*" | grep -vf $EC | sort -u | sed '/@\|<BR>\|\_\|*/d' | dnsx -a -aaaa -cname -ns -ptr -mx -soa -retry 3 -r ~/wordlists/resolvers.txt -t 10 | anew database/subdomains.txt
+     else
+	     echo -e "\nRUNNING DNSX\n"
+         cat .tmp/*.list | grep -v "*" | sort -u | sed '/@\|<BR>\|\_\|*/d' | dnsx -a -aaaa -cname -ns -ptr -mx -soa -retry 3 -r ~/wordlists/resolvers.txt -t 10 | anew database/subdomains.txt
+     fi
 
     #@> WEB PROBING AND SCREENSHOT
+	echo -e "\nRUNNING NAABU\n"
     naabu -retries 3 -r ~/wordlists/resolvers.txt -l database/subdomains.txt -p "$PR" -no-color  | anew database/ports.txt
-    cat database/ports.txt | httprobe -prefer-https | anew database/lives.txt
+    
+	echo -e "\nRUNNING HTTPROBE\n"
+	cat database/ports.txt | httprobe -prefer-https | anew database/lives.txt
     xargs -a database/lives.txt -P 50 -I % bash -c "echo % | aquatone -chrome-path $CHROME_BIN -out database/screenshots/ -threads 10 "  
     [ "$JO" == "False" ] || cat database/lives.txt | python3 -c "import sys; import json; print (json.dumps({'liveurls':list(sys.stdin)}))" | sed 's/\\n//g' | tee .json/liveurls.json 
     [ "$JO" == "False" ] || cat database/subdomains.txt | python3 -c "import sys; import json; print (json.dumps({'subdomains':list(sys.stdin)}))" | sed 's/\\n//g' | tee .json/subdomains.json 
